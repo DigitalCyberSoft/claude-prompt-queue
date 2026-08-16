@@ -1,9 +1,9 @@
 {
   "name": "prompt-queue",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Queue prompts to run sequentially. Type '/queue <prompt>' to queue (multiple per message supported), prompts auto-execute after the current task finishes.",
   "author": {
-    "name": "mugen"
+    "name": "DigitalCyberSoft"
   },
   "license": "MIT",
   "keywords": ["queue", "automation", "workflow"]
