@@ -107,6 +107,54 @@ rm -f "$QF"
 SM=$(mkin '/queue describe [Image #1] please' | bash scripts/queue-next.sh | jfield systemMessage)
 case "$SM" in *"pasted images/text can't be queued"*) ok "warning present";; *) bad "warning present";; esac
 
+echo "== 25 stacked tasks drain in exact FIFO order with exact counts =="
+rm -f "$QF"
+N=25
+MSG='/queue task 1'
+for ((i = 2; i <= N; i++)); do MSG+=$'\n'"/queue task $i"; done
+OUT=$(mkin "$MSG" | bash scripts/queue-next.sh)
+[ "$(printf '%s' "$OUT" | jfield systemMessage)" = "Prompt queue: starting task — $((N - 1)) more queued" ]
+check $? "all $((N - 1)) tasks stacked behind the started one"
+ORDER_OK=1; COUNT_OK=1
+for ((i = 2; i <= N; i++)); do
+  OUT=$(stopin | bash scripts/queue-stop.sh)
+  GOT=$(printf '%s' "$OUT" | jfield reason)
+  [ "$GOT" = "task $i" ] || { ORDER_OK=0; echo "    round $((i - 1)): expected 'task $i', popped '$GOT'"; }
+  REM=$((N - i))
+  if [ "$REM" -eq 0 ]; then WANT="Prompt queue: running last queued task — queue is now empty"
+  elif [ "$REM" -eq 1 ]; then WANT="Prompt queue: running next task — 1 more queued"
+  else WANT="Prompt queue: running next task — ${REM} more queued"; fi
+  [ "$(printf '%s' "$OUT" | jfield systemMessage)" = "$WANT" ] || { COUNT_OK=0; echo "    round $((i - 1)): wrong count message"; }
+done
+[ "$ORDER_OK" -eq 1 ]; check $? "every pop in FIFO order across the full drain"
+[ "$COUNT_OK" -eq 1 ]; check $? "count message exact on every round"
+[ ! -f "$QF" ]; check $? "queue file removed after full drain"
+OUT=$(stopin | bash scripts/queue-stop.sh)
+[ -z "$OUT" ]; check $? "stop silent after full drain"
+
+echo "== tasks queued mid-drain append behind the older ones =="
+rm -f "$QF"
+mkin $'/queue a1\n/queue a2\n/queue a3' | bash scripts/queue-next.sh > /dev/null
+stopin | bash scripts/queue-stop.sh > /dev/null
+OUT=$(mkin $'/queue b1\n/queue b2' | bash scripts/queue-next.sh)
+CTX=$(printf '%s' "$OUT" | jfield hookSpecificOutput.additionalContext)
+case "$CTX" in *"a3"*) ok "oldest pending task starts, not the newly queued one";; *) bad "oldest pending task starts, not the newly queued one";; esac
+[ "$(printf '%s' "$OUT" | jfield systemMessage)" = "Prompt queue: starting task — 2 more queued" ]; check $? "count spans old and new tasks"
+[ "$(cat "$QF")" = "b1${RS}b2${RS}" ]; check $? "new tasks land behind the drain point"
+[ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = "b1" ]; check $? "b1 pops next"
+[ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = "b2" ]; check $? "b2 pops last"
+
+echo "== status lists every pending task, in order =="
+rm -f "$QF"
+mkdir -p "$(dirname "$QF")"
+: > "$QF"
+for ((i = 1; i <= 12; i++)); do printf 'status item %d%s' "$i" "$RS" >> "$QF"; done
+REASON=$(mkin '/queue' | bash scripts/queue-next.sh | jfield reason)
+EXPECT="Queue: 12 tasks pending"
+for ((i = 1; i <= 12; i++)); do EXPECT+=$'\n'"  ${i}. status item ${i}"; done
+[ "$REASON" = "$EXPECT" ]; check $? "12-task listing matches exactly"
+rm -f "$QF"
+
 echo
 echo "passed: $PASS  failed: $FAIL"
 [ "$FAIL" -eq 0 ]

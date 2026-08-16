@@ -49,7 +49,7 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 
 ## Tests
 
-`bash tests/run-tests.sh` — exercises the hook scripts directly (queueing, FIFO order, multi-line and hostile content round-trips, status view, counts). Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push.
+`bash tests/run-tests.sh` — exercises the hook scripts directly: queueing, multi-line and hostile content round-trips, status view, and a 25-task drain verifying FIFO order and the reported count on every round, including tasks added mid-drain. Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push.
 
 ## Limitations
 
