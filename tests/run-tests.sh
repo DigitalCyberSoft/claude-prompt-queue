@@ -5,7 +5,8 @@
 set -u
 cd "$(dirname "$0")/.."
 
-export CLAUDE_PLUGIN_DATA="$(mktemp -d)"
+# Explicit template: BSD mktemp doesn't default one like GNU does
+export CLAUDE_PLUGIN_DATA="$(mktemp -d "${TMPDIR:-/tmp}/pq-tests.XXXXXX")"
 trap 'rm -rf "$CLAUDE_PLUGIN_DATA"' EXIT
 SID="test-session"
 QF="$CLAUDE_PLUGIN_DATA/queue/$SID.queue"

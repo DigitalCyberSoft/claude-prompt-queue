@@ -8,3 +8,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash tests/run-tests.sh
+  test-macos:
+    # Stock macOS tooling: bash 3.2, BSD awk/sed. The PATH shim makes every
+    # `bash` inside the suite resolve to /bin/bash even if a newer one is
+    # installed on the runner.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p /tmp/stockbash && ln -s /bin/bash /tmp/stockbash/bash
+          export PATH=/tmp/stockbash:$PATH
+          bash --version | head -1
+          awk --version 2>&1 | head -1 || true
+          bash tests/run-tests.sh

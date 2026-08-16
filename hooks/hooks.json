@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/queue-setup.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/queue-setup.sh\""
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/queue-next.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/queue-next.sh\"",
             "statusMessage": "Checking queue..."
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/queue-stop.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/queue-stop.sh\"",
             "statusMessage": "Processing queue..."
           }
         ]
