@@ -69,4 +69,4 @@ queue: also update the docs
 - Mid-turn delivery needs Claude Code's auto queue mode; on models where auto mode is unavailable (e.g. Haiku), a message typed during a turn waits in the input queue until you press Enter again
 - Queues are per session — tasks still queued when a session ends are not picked up by other sessions
 - Chained prompts show as "Stop hook error" — cosmetic only, not an actual error
-- Pasted images and large text pastes can't be queued — hooks only see the `[Image #1]` placeholder, not the attachment, so a queued task runs without it (you get a warning when this happens)
+- Pasted images and large text pastes live in the conversation, not the queue — queued tasks that reference them work, since the attachment lands in the chat when the message passes through and later rounds can still see it, but a very long drain can compact it out of view before a late task runs (a status note reminds you when a queued task references pasted content)

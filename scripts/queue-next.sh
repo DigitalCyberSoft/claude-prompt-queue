@@ -65,12 +65,13 @@ else
   MSG="Prompt queue: starting task — ${REMAINING} more queued"
 fi
 
-# Pasted images/text arrive as attachments hooks can't capture — only the
-# "[Image #1]"-style placeholder survives, so the task would run without them
+# Attachments never enter the queue file (hooks only see the "[Image #1]"
+# placeholder), but the passed-through message carries them into the chat,
+# where later queued rounds can still see them — until compaction evicts them
 PASTE_RE='\[(Image|Pasted text) #[0-9]+'
 for T in "${PQ_TASKS[@]}"; do
   if [[ "$T" =~ $PASTE_RE ]]; then
-    MSG+=" ⚠ pasted images/text can't be queued and will be missing"
+    MSG+=" ℹ pasted content stays in the chat, not the queue — very long drains may compact it away before a late task runs"
     break
   fi
 done

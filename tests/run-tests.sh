@@ -108,10 +108,10 @@ OUT=$(mkin '/QUEUE shout task' | bash scripts/queue-next.sh)
 CTX=$(printf '%s' "$OUT" | jfield hookSpecificOutput.additionalContext)
 case "$CTX" in *"shout task"*) ok "uppercase prefix accepted";; *) bad "uppercase prefix accepted";; esac
 
-echo "== pasted-attachment placeholder warns =="
+echo "== pasted-attachment placeholder gets an informational note =="
 rm -f "$QF"
 SM=$(mkin '/queue describe [Image #1] please' | bash scripts/queue-next.sh | jfield systemMessage)
-case "$SM" in *"pasted images/text can't be queued"*) ok "warning present";; *) bad "warning present";; esac
+case "$SM" in *"stays in the chat, not the queue"*) ok "note present";; *) bad "note present";; esac
 
 echo "== 25 stacked tasks drain in exact FIFO order with exact counts =="
 rm -f "$QF"

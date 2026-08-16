@@ -1,6 +1,6 @@
 {
   "name": "prompt-queue",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Queue prompts to run sequentially. Type '/queue <prompt>' when idle or 'queue: <prompt>' mid-turn (multiple per message supported), prompts auto-execute after the current task finishes.",
   "author": {
     "name": "DigitalCyberSoft"
