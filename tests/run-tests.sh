@@ -185,6 +185,9 @@ OUT=$(printf 'no prefix at all\nsecond line' | bash scripts/queue-add.sh "$QF")
 stopin | bash scripts/queue-stop.sh > /dev/null
 [ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = "added later" ]; check $? "mid-turn task pops in order"
 [ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = $'no prefix at all\nsecond line' ]; check $? "raw multi-line round-trips"
+printf 'QUEUE: caps prefix task' | bash scripts/queue-add.sh "$QF" > /dev/null
+[ "$(cat "$QF")" = "caps prefix task${RS}" ]; check $? "QUEUE: prefix case-insensitive in queue-add"
+rm -f "$QF"
 printf '   \n' | bash scripts/queue-add.sh "$QF" >/dev/null 2>&1
 [ $? -ne 0 ]; check $? "blank input rejected"
 bash scripts/queue-add.sh </dev/null >/dev/null 2>&1

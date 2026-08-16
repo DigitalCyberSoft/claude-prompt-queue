@@ -33,7 +33,7 @@ fi
 QUEUE_FILE="${QUEUE_DIR}/${SESSION_ID}.queue"
 ADD_SH="${CLAUDE_PLUGIN_ROOT}/scripts/queue-add.sh"
 
-CTX="prompt-queue plugin: a user message starting with \"queue:\" that arrives while you are mid-task is a request to DEFER that task, not to act on it now. Append it to the prompt queue by piping the message verbatim into the helper:
+CTX="prompt-queue plugin: a user message starting with \"queue:\" (any capitalization — \"Queue:\" and \"QUEUE:\" count) that arrives while you are mid-task is a request to DEFER that task, not to act on it now. Append it to the prompt queue by piping the message verbatim into the helper:
 
 bash \"${ADD_SH}\" \"${QUEUE_FILE}\" <<'PQ_EOF'
 queue: the task text here
