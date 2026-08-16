@@ -47,6 +47,10 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 - **Stop hook** — when Claude finishes a round, pops the next task from the queue, injects it, and reports how many remain
 - The stub's body is only ever seen by Claude alongside the hook's instructions; if the hook failed to run (e.g. plugin disabled, `jq` missing), it tells you the prompt was not queued instead of executing it
 
+## Tests
+
+`bash tests/run-tests.sh` — exercises the hook scripts directly (queueing, FIFO order, multi-line and hostile content round-trips, status view, counts). Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push.
+
 ## Limitations
 
 - Queuing only works while Claude is idle (steering messages during processing bypass hooks)

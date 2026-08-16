@@ -17,10 +17,8 @@ pq_extract_prompt() {
   awk '
   { doc = doc $0 }
   END {
-    needle = "\"prompt\":\""
-    i = index(doc, needle)
-    if (i == 0) exit
-    s = substr(doc, i + length(needle))
+    if (!match(doc, /"prompt"[ \t]*:[ \t]*"/)) exit
+    s = substr(doc, RSTART + RLENGTH)
     n = length(s); out = ""
     for (j = 1; j <= n; j++) {
       c = substr(s, j, 1)
@@ -43,7 +41,7 @@ pq_extract_prompt() {
 
 # Session ids are UUIDs, so a plain field grab is enough
 pq_extract_session_id() {
-  tr -d '\n' | sed -nE 's/.*"session_id":"([^"]*)".*/\1/p'
+  tr -d '\n' | sed -nE 's/.*"session_id"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'
 }
 
 # JSON-encodes a string, including the surrounding quotes
