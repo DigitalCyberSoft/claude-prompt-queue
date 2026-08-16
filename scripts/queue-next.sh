@@ -2,6 +2,18 @@
 # UserPromptSubmit hook: intercepts "/queue" messages and queues them
 INPUT=$(cat)
 
+# Without jq we can't parse or queue anything — block /queue messages with a
+# clear explanation instead of failing silently (fixed strings only, so no
+# JSON escaping is needed)
+if ! command -v jq >/dev/null 2>&1; then
+  case "$INPUT" in
+    *'"prompt":"/queue'* | *'"prompt":"/prompt-queue:queue'*)
+      printf '%s' '{"decision":"block","reason":"prompt-queue: jq is not installed, so nothing was queued. Install jq (e.g. dnf/apt/brew install jq) and try again."}'
+      ;;
+  esac
+  exit 0
+fi
+
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 
@@ -69,20 +81,33 @@ if [ "${#TASKS[@]}" -eq 0 ]; then
   exit 0
 fi
 
-mkdir -p "$QUEUE_DIR"
-jq '. + $ARGS.positional' --args "${TASKS[@]}" <<< "$QUEUE" > "$QUEUE_FILE.tmp" \
-  && mv "$QUEUE_FILE.tmp" "$QUEUE_FILE"
+# Append the new tasks, then immediately start the oldest pending task by
+# letting this prompt through with instructions. Blocking instead would
+# leave the session idle: no turn runs, so the Stop hook never fires and
+# the queue would sit untouched until some other prompt completed.
+NEW_QUEUE=$(jq '. + $ARGS.positional' --args "${TASKS[@]}" <<< "$QUEUE")
+FIRST=$(jq -r '.[0]' <<< "$NEW_QUEUE")
+REMAINING=$(jq 'length - 1' <<< "$NEW_QUEUE")
 
-TOTAL=$(jq 'length' "$QUEUE_FILE")
-TOTAL_NOUN=$([ "$TOTAL" -eq 1 ] && echo task || echo tasks)
-
-if [ "${#TASKS[@]}" -eq 1 ]; then
-  MSG="Queued: ${TASKS[0]%%$'\n'*} (${TOTAL} ${TOTAL_NOUN} in queue)"
+if [ "$REMAINING" -gt 0 ]; then
+  mkdir -p "$QUEUE_DIR"
+  jq '.[1:]' <<< "$NEW_QUEUE" > "$QUEUE_FILE.tmp" && mv "$QUEUE_FILE.tmp" "$QUEUE_FILE"
 else
-  MSG="Queued ${#TASKS[@]} tasks (${TOTAL} in queue):"
-  for T in "${TASKS[@]}"; do
-    MSG+=$'\n'"  • ${T%%$'\n'*}"
-  done
+  rm -f "$QUEUE_FILE"
+fi
+
+CTX="prompt-queue: execute exactly this task now, and nothing else:
+
+${FIRST}
+
+Any /queue lines in the user's message are already queued (${REMAINING} pending) and will run automatically in later rounds — do not execute them now and do not comment on the /queue syntax."
+
+if [ "$REMAINING" -eq 0 ]; then
+  MSG="Prompt queue: starting task — queue empty after it"
+elif [ "$REMAINING" -eq 1 ]; then
+  MSG="Prompt queue: starting task — 1 more queued"
+else
+  MSG="Prompt queue: starting task — ${REMAINING} more queued"
 fi
 
 # Pasted images/text arrive as attachments hooks can't capture — only the
@@ -90,13 +115,16 @@ fi
 PASTE_RE='\[(Image|Pasted text) #[0-9]+'
 for T in "${TASKS[@]}"; do
   if [[ "$T" =~ $PASTE_RE ]]; then
-    MSG+=$'\n'"⚠ pasted images/text can't be queued — this task will run without the attachment"
+    MSG+=" ⚠ pasted images/text can't be queued and will be missing"
     break
   fi
 done
 
-jq -n --arg msg "$MSG" '{
-  "decision": "block",
-  "reason": $msg
+jq -n --arg ctx "$CTX" --arg msg "$MSG" '{
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": $ctx
+  },
+  "systemMessage": $msg
 }'
 exit 0

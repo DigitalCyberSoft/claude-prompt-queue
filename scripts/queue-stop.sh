@@ -3,6 +3,15 @@
 # reports how many tasks remain queued
 INPUT=$(cat)
 
+# Without jq the queue can't be drained; warn only if tasks are stranded
+if ! command -v jq >/dev/null 2>&1; then
+  SESSION_ID=$(printf '%s' "$INPUT" | sed -n 's/.*"session_id":"\([^"]*\)".*/\1/p')
+  if [ -n "$SESSION_ID" ] && [ -s "${CLAUDE_PLUGIN_DATA:-/tmp}/queue/${SESSION_ID}.json" ]; then
+    printf '%s' '{"systemMessage":"prompt-queue: jq is not installed — queued tasks are stuck until it is."}'
+  fi
+  exit 0
+fi
+
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 if [ -z "$SESSION_ID" ]; then
   exit 0

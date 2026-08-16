@@ -9,4 +9,10 @@ if [ -f "$STUB_SRC" ] && ! cmp -s "$STUB_SRC" "$STUB_DST"; then
   mkdir -p "${HOME}/.claude/commands"
   cp -f "$STUB_SRC" "$STUB_DST"
 fi
+
+# Queues are per session, so files left by ended sessions are dead weight
+QUEUE_DIR="${CLAUDE_PLUGIN_DATA:-/tmp}/queue"
+if [ -d "$QUEUE_DIR" ]; then
+  find "$QUEUE_DIR" -type f -mtime +7 -delete 2>/dev/null
+fi
 exit 0
