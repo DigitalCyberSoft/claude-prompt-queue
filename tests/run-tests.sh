@@ -17,24 +17,27 @@ ok()   { PASS=$((PASS + 1)); echo "  ok: $1"; }
 bad()  { FAIL=$((FAIL + 1)); echo "  FAIL: $1"; }
 check() { if [ "$1" -eq 0 ]; then ok "$2"; else bad "$2"; fi; }
 
+# The python helpers do all IO as explicit UTF-8 bytes: on Windows, text-mode
+# pipes translate \n to \r\n and stdout can default to cp1252
 mkin() {
   python3 - "$1" "$SID" <<'PY'
 import json, sys
-print(json.dumps({"session_id": sys.argv[2], "transcript_path": "/x.jsonl",
-                  "cwd": "/tmp", "hook_event_name": "UserPromptSubmit",
-                  "prompt": sys.argv[1]}, separators=(",", ":"), ensure_ascii=False))
+sys.stdout.buffer.write(json.dumps(
+    {"session_id": sys.argv[2], "transcript_path": "/x.jsonl",
+     "cwd": "/tmp", "hook_event_name": "UserPromptSubmit",
+     "prompt": sys.argv[1]}, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 PY
 }
 stopin() { printf '{"session_id":"%s","hook_event_name":"Stop"}' "$SID"; }
 jfield() {
   python3 -c '
 import json, sys
-d = json.load(sys.stdin)
+d = json.load(sys.stdin.buffer)
 for k in sys.argv[1].split("."):
     d = d[k]
-print(d, end="")' "$1"
+sys.stdout.buffer.write(str(d).encode("utf-8"))' "$1"
 }
-jvalid() { python3 -c 'import json, sys; json.load(sys.stdin)' 2>/dev/null; }
+jvalid() { python3 -c 'import json, sys; json.load(sys.stdin.buffer)' 2>/dev/null; }
 
 echo "== single task on empty queue starts immediately =="
 rm -f "$QF"

@@ -8,6 +8,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash tests/run-tests.sh
+  test-windows:
+    # Native Windows via Git Bash — the shell Claude Code runs hooks with on
+    # Windows. Also exercises the .gitattributes LF pinning for real.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          # Windows images ship python.exe; make sure `python3` resolves to a
+          # working interpreter (not the Microsoft Store stub)
+          if ! python3 -c 'pass' >/dev/null 2>&1; then
+            mkdir -p /tmp/pyshim
+            printf '#!/bin/sh\nexec python "$@"\n' > /tmp/pyshim/python3
+            chmod +x /tmp/pyshim/python3
+            export PATH=/tmp/pyshim:$PATH
+          fi
+          bash --version | head -1
+          bash tests/run-tests.sh
   test-macos:
     # Stock macOS tooling: bash 3.2, BSD awk/sed. The PATH shim makes every
     # `bash` inside the suite resolve to /bin/bash even if a newer one is
