@@ -43,7 +43,7 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 ## Platform support
 
 - **Linux & macOS** — fully supported. No dependencies beyond `bash`, `awk`, and `sed`, which ship with the OS; the test suite runs in CI on both Ubuntu and stock macOS (bash 3.2, BSD awk/sed).
-- **Windows** — works under WSL. On native Windows the hooks run through Git Bash, which Claude Code requires anyway; shell scripts are pinned to LF line endings and hook paths are quoted for spaces, but native Windows is not covered by CI.
+- **Windows** — works under WSL and on native Windows, where the hooks run through Git Bash (which Claude Code requires anyway). Shell scripts are pinned to LF line endings and hook paths are quoted for spaces; the test suite runs in CI on native Windows Git Bash.
 
 ## How it works
 
@@ -54,7 +54,7 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 
 ## Tests
 
-`bash tests/run-tests.sh` — exercises the hook scripts directly: queueing, multi-line and hostile content round-trips, status view, and a 25-task drain verifying FIFO order and the reported count on every round, including tasks added mid-drain. Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push, on Linux and on stock macOS.
+`bash tests/run-tests.sh` — exercises the hook scripts directly: queueing, multi-line and hostile content round-trips, status view, and a 25-task drain verifying FIFO order and the reported count on every round, including tasks added mid-drain. Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push, on Linux, stock macOS, and Windows (Git Bash).
 
 ## Limitations
 
