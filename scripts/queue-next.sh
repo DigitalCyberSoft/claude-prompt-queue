@@ -1,21 +1,11 @@
 #!/bin/bash
 # UserPromptSubmit hook: intercepts "/queue" messages and queues them
+. "$(dirname "$0")/queue-lib.sh"
+
 INPUT=$(cat)
 
-# Without jq we can't parse or queue anything — block /queue messages with a
-# clear explanation instead of failing silently (fixed strings only, so no
-# JSON escaping is needed)
-if ! command -v jq >/dev/null 2>&1; then
-  case "$INPUT" in
-    *'"prompt":"/queue'* | *'"prompt":"/prompt-queue:queue'*)
-      printf '%s' '{"decision":"block","reason":"prompt-queue: jq is not installed, so nothing was queued. Install jq (e.g. dnf/apt/brew install jq) and try again."}'
-      ;;
-  esac
-  exit 0
-fi
-
-PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+PROMPT=$(pq_extract_prompt <<< "$INPUT")
+SESSION_ID=$(pq_extract_session_id <<< "$INPUT")
 
 if [ -z "$PROMPT" ] || [ -z "$SESSION_ID" ]; then
   exit 0
@@ -32,18 +22,13 @@ if ! [[ "$FIRST_LINE" =~ ${QUEUE_CMD_RE}([[:space:]]|$) ]]; then
   exit 0
 fi
 
-QUEUE_DIR="${CLAUDE_PLUGIN_DATA:-/tmp}/queue"
-QUEUE_FILE="${QUEUE_DIR}/${SESSION_ID}.json"
-
-# The queue file holds one JSON array of non-empty task strings; anything
-# else (missing, corrupt, wrong shape) sanitizes to an empty queue
-SANITIZE='select(type == "array") | [ .[] | strings | select(length > 0) ]'
-QUEUE=$(jq -c "$SANITIZE" "$QUEUE_FILE" 2>/dev/null)
-[ -z "$QUEUE" ] && QUEUE="[]"
+QUEUE_FILE="$(pq_queue_dir)/${SESSION_ID}.queue"
+pq_load_queue "$QUEUE_FILE"
 
 TASKS=()
 add_task() {
   local t="$1"
+  t="${t//$PQ_RS/}"
   t="${t#"${t%%[![:space:]]*}"}"
   t="${t%"${t##*[![:space:]]}"}"
   [ -n "$t" ] && TASKS+=("$t")
@@ -66,18 +51,19 @@ done <<< "$PROMPT"
 
 # Bare "/queue" shows the pending queue instead of adding to it
 if [ "${#TASKS[@]}" -eq 0 ]; then
-  COUNT=$(jq 'length' <<< "$QUEUE")
+  COUNT=${#PQ_ITEMS[@]}
   if [ "$COUNT" -eq 0 ]; then
     MSG="Queue is empty — use /queue <prompt> to add a task"
   else
     NOUN=$([ "$COUNT" -eq 1 ] && echo task || echo tasks)
-    LIST=$(jq -r 'to_entries[] | "  \(.key + 1). \(.value | gsub("\n"; " "))"' <<< "$QUEUE")
-    MSG="Queue: ${COUNT} ${NOUN} pending"$'\n'"$LIST"
+    MSG="Queue: ${COUNT} ${NOUN} pending"
+    I=0
+    for ITEM in "${PQ_ITEMS[@]}"; do
+      I=$((I + 1))
+      MSG+=$'\n'"  ${I}. ${ITEM//$'\n'/ }"
+    done
   fi
-  jq -n --arg msg "$MSG" '{
-    "decision": "block",
-    "reason": $msg
-  }'
+  printf '{"decision":"block","reason":%s}' "$(pq_json_str "$MSG")"
   exit 0
 fi
 
@@ -85,16 +71,11 @@ fi
 # letting this prompt through with instructions. Blocking instead would
 # leave the session idle: no turn runs, so the Stop hook never fires and
 # the queue would sit untouched until some other prompt completed.
-NEW_QUEUE=$(jq '. + $ARGS.positional' --args "${TASKS[@]}" <<< "$QUEUE")
-FIRST=$(jq -r '.[0]' <<< "$NEW_QUEUE")
-REMAINING=$(jq 'length - 1' <<< "$NEW_QUEUE")
-
-if [ "$REMAINING" -gt 0 ]; then
-  mkdir -p "$QUEUE_DIR"
-  jq '.[1:]' <<< "$NEW_QUEUE" > "$QUEUE_FILE.tmp" && mv "$QUEUE_FILE.tmp" "$QUEUE_FILE"
-else
-  rm -f "$QUEUE_FILE"
-fi
+ALL=("${PQ_ITEMS[@]}" "${TASKS[@]}")
+FIRST="${ALL[0]}"
+REST=("${ALL[@]:1}")
+pq_save_queue "$QUEUE_FILE" "${REST[@]}"
+REMAINING=${#REST[@]}
 
 CTX="prompt-queue: execute exactly this task now, and nothing else:
 
@@ -120,11 +101,6 @@ for T in "${TASKS[@]}"; do
   fi
 done
 
-jq -n --arg ctx "$CTX" --arg msg "$MSG" '{
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": $ctx
-  },
-  "systemMessage": $msg
-}'
+printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s},"systemMessage":%s}' \
+  "$(pq_json_str "$CTX")" "$(pq_json_str "$MSG")"
 exit 0
