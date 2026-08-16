@@ -6,10 +6,23 @@ Queue prompts in Claude Code. Type `/queue <prompt>` to queue tasks that auto-ex
 
 ## Install & Usage
 
+Run each command separately — pasting the whole block at once submits it as a single command:
+
 ```
 /plugin marketplace add DigitalCyberSoft/claude-prompt-queue
+```
+
+```
 /plugin install prompt-queue@prompt-queue-marketplace
+```
+
+```
 /reload-plugins
+```
+
+Then queue tasks:
+
+```
 /queue do this
 ```
 
