@@ -40,16 +40,21 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 - `/queue` with no arguments lists the pending tasks
 - Each time a queued task starts, a status line reports how many tasks are still queued
 
+## Platform support
+
+- **Linux & macOS** — fully supported. No dependencies beyond `bash`, `awk`, and `sed`, which ship with the OS; the test suite runs in CI on both Ubuntu and stock macOS (bash 3.2, BSD awk/sed).
+- **Windows** — works under WSL. On native Windows the hooks run through Git Bash, which Claude Code requires anyway; shell scripts are pinned to LF line endings and hook paths are quoted for spaces, but native Windows is not covered by CI.
+
 ## How it works
 
 - **SessionStart hook** — copies a `/queue` command stub to `~/.claude/commands/queue.md` so the bare `/queue` name resolves (unregistered slash commands are rejected before hooks run, and plugin commands only resolve as `/prompt-queue:queue`); also deletes stale queue files
 - **UserPromptSubmit hook** — intercepts `/queue` messages, appends the tasks to a per-session queue file (tasks separated by an ASCII record-separator byte, so they can span lines), then lets the turn proceed with instructions to run the oldest pending task, so the queue starts draining immediately instead of waiting for an unrelated prompt to finish
 - **Stop hook** — when Claude finishes a round, pops the next task from the queue, injects it, and reports how many remain
-- The stub's body is only ever seen by Claude alongside the hook's instructions; if the hook failed to run (e.g. plugin disabled, `jq` missing), it tells you the prompt was not queued instead of executing it
+- The stub's body is only ever seen by Claude alongside the hook's instructions; if the hook failed to run (e.g. plugin disabled or erroring), it tells you the prompt was not queued instead of executing it
 
 ## Tests
 
-`bash tests/run-tests.sh` — exercises the hook scripts directly: queueing, multi-line and hostile content round-trips, status view, and a 25-task drain verifying FIFO order and the reported count on every round, including tasks added mid-drain. Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push.
+`bash tests/run-tests.sh` — exercises the hook scripts directly: queueing, multi-line and hostile content round-trips, status view, and a 25-task drain verifying FIFO order and the reported count on every round, including tasks added mid-drain. Needs `python3`, used only by the tests to build and validate hook JSON. Runs in CI on every push, on Linux and on stock macOS.
 
 ## Limitations
 
