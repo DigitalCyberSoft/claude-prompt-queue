@@ -11,46 +11,20 @@ if [ -z "$PROMPT" ] || [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
-shopt -s nocasematch
-
-# Matches "/queue" and its namespaced form "/prompt-queue:queue"
-QUEUE_CMD_RE='^[[:space:]]*/(prompt-queue:)?queue'
-
-# Only handle messages whose first line is a /queue command
+# Only handle messages whose first line is a /queue command or queue: prefix
 FIRST_LINE="${PROMPT%%$'\n'*}"
-if ! [[ "$FIRST_LINE" =~ ${QUEUE_CMD_RE}([[:space:]]|$) ]]; then
+if ! [[ "$FIRST_LINE" =~ $PQ_SLASH_RE || "$FIRST_LINE" =~ $PQ_PREFIX_RE ]]; then
   exit 0
 fi
 
 QUEUE_FILE="$(pq_queue_dir)/${SESSION_ID}.queue"
 pq_load_queue "$QUEUE_FILE"
 
-TASKS=()
-add_task() {
-  local t="$1"
-  t="${t//$PQ_RS/}"
-  t="${t#"${t%%[![:space:]]*}"}"
-  t="${t%"${t##*[![:space:]]}"}"
-  [ -n "$t" ] && TASKS+=("$t")
-}
-
-# Each /queue line starts a new task; lines without the prefix continue the
-# task above them, so one message can queue several (multi-line) tasks
-CURRENT=""
-STARTED=0
-while IFS= read -r LINE; do
-  if [[ "$LINE" =~ ${QUEUE_CMD_RE}([[:space:]]+(.*))?$ ]]; then
-    [ "$STARTED" -eq 1 ] && add_task "$CURRENT"
-    CURRENT="${BASH_REMATCH[3]}"
-    STARTED=1
-  elif [ "$STARTED" -eq 1 ]; then
-    CURRENT+=$'\n'"$LINE"
-  fi
-done <<< "$PROMPT"
-[ "$STARTED" -eq 1 ] && add_task "$CURRENT"
+# One message can queue several (multi-line) tasks
+pq_split_tasks <<< "$PROMPT"
 
 # Bare "/queue" shows the pending queue instead of adding to it
-if [ "${#TASKS[@]}" -eq 0 ]; then
+if [ "${#PQ_TASKS[@]}" -eq 0 ]; then
   COUNT=${#PQ_ITEMS[@]}
   if [ "$COUNT" -eq 0 ]; then
     MSG="Queue is empty — use /queue <prompt> to add a task"
@@ -71,7 +45,7 @@ fi
 # letting this prompt through with instructions. Blocking instead would
 # leave the session idle: no turn runs, so the Stop hook never fires and
 # the queue would sit untouched until some other prompt completed.
-ALL=("${PQ_ITEMS[@]}" "${TASKS[@]}")
+ALL=("${PQ_ITEMS[@]}" "${PQ_TASKS[@]}")
 FIRST="${ALL[0]}"
 REST=("${ALL[@]:1}")
 pq_save_queue "$QUEUE_FILE" "${REST[@]}"
@@ -81,7 +55,7 @@ CTX="prompt-queue: execute exactly this task now, and nothing else:
 
 ${FIRST}
 
-Any /queue lines in the user's message are already queued (${REMAINING} pending) and will run automatically in later rounds — do not execute them now and do not comment on the /queue syntax."
+Any /queue or queue: lines in the user's message are already queued (${REMAINING} pending) and will run automatically in later rounds — do not execute them now and do not comment on the queueing syntax."
 
 if [ "$REMAINING" -eq 0 ]; then
   MSG="Prompt queue: starting task — queue empty after it"
@@ -94,7 +68,7 @@ fi
 # Pasted images/text arrive as attachments hooks can't capture — only the
 # "[Image #1]"-style placeholder survives, so the task would run without them
 PASTE_RE='\[(Image|Pasted text) #[0-9]+'
-for T in "${TASKS[@]}"; do
+for T in "${PQ_TASKS[@]}"; do
   if [[ "$T" =~ $PASTE_RE ]]; then
     MSG+=" ⚠ pasted images/text can't be queued and will be missing"
     break

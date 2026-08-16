@@ -36,7 +36,14 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 /queue update the changelog
 ```
 
+While Claude is **busy working**, use the plain-text form instead — slash commands typed mid-turn are held by Claude Code until the turn ends, but plain text is steered into the running turn, where the plugin has taught Claude to queue it and carry on:
+
+```
+queue: also update the docs
+```
+
 - If Claude is idle, the first task starts right away; the rest run one per round after it
+- `queue: <task>` works when idle too — both forms are equivalent there
 - `/queue` with no arguments lists the pending tasks
 - Each time a queued task starts, a status line reports how many tasks are still queued
 
@@ -47,8 +54,8 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 
 ## How it works
 
-- **SessionStart hook** — copies a `/queue` command stub to `~/.claude/commands/queue.md` so the bare `/queue` name resolves (unregistered slash commands are rejected before hooks run, and plugin commands only resolve as `/prompt-queue:queue`); also deletes stale queue files
-- **UserPromptSubmit hook** — intercepts `/queue` messages, appends the tasks to a per-session queue file (tasks separated by an ASCII record-separator byte, so they can span lines), then lets the turn proceed with instructions to run the oldest pending task, so the queue starts draining immediately instead of waiting for an unrelated prompt to finish
+- **SessionStart hook** — copies a `/queue` command stub to `~/.claude/commands/queue.md` so the bare `/queue` name resolves (unregistered slash commands are rejected before hooks run, and plugin commands only resolve as `/prompt-queue:queue`); injects a standing instruction with a baked-in `scripts/queue-add.sh` command so Claude can queue mid-turn `queue:` messages itself — messages steered into a running turn never reach hooks; also deletes stale queue files
+- **UserPromptSubmit hook** — intercepts `/queue` and `queue:` messages, appends the tasks to a per-session queue file (tasks separated by an ASCII record-separator byte, so they can span lines), then lets the turn proceed with instructions to run the oldest pending task, so the queue starts draining immediately instead of waiting for an unrelated prompt to finish
 - **Stop hook** — when Claude finishes a round, pops the next task from the queue, injects it, and reports how many remain
 - The stub's body is only ever seen by Claude alongside the hook's instructions; if the hook failed to run (e.g. plugin disabled or erroring), it tells you the prompt was not queued instead of executing it
 
@@ -58,7 +65,8 @@ Queue several tasks in one message by putting each on its own `/queue` line (lin
 
 ## Limitations
 
-- Queuing only works while Claude is idle (steering messages during processing bypass hooks)
+- Mid-turn queueing (`queue:`) is performed by Claude itself, since steered messages bypass hooks — it relies on the model following the injected instruction, and Claude Code may ask permission for the queue-write Bash command
+- Mid-turn delivery needs Claude Code's auto queue mode; on models where auto mode is unavailable (e.g. Haiku), a message typed during a turn waits in the input queue until you press Enter again
 - Queues are per session — tasks still queued when a session ends are not picked up by other sessions
 - Chained prompts show as "Stop hook error" — cosmetic only, not an actual error
 - Pasted images and large text pastes can't be queued — hooks only see the `[Image #1]` placeholder, not the attachment, so a queued task runs without it (you get a warning when this happens)

@@ -4,6 +4,12 @@
 # may contain newlines. Each task is followed by one separator.
 PQ_RS=$'\x1e'
 
+# /queue, /prompt-queue:queue, and the plain-text "queue:" prefix (usable
+# mid-turn, where slash commands are held until the turn ends)
+PQ_SLASH_RE='^[[:space:]]*/(prompt-queue:)?queue([[:space:]]+(.*))?$'
+PQ_PREFIX_RE='^[[:space:]]*queue:[[:space:]]*(.*)$'
+shopt -s nocasematch
+
 pq_queue_dir() {
   printf '%s' "${CLAUDE_PLUGIN_DATA:-/tmp}/queue"
 }
@@ -53,6 +59,37 @@ pq_json_str() {
   s="${s//$'\r'/\\r}"
   s="${s//$'\t'/\\t}"
   printf '"%s"' "$s"
+}
+
+# Sanitizes a task (drops separator bytes, trims whitespace) and appends it
+# to PQ_TASKS; empty tasks are dropped
+pq_add_task() {
+  local t="$1"
+  t="${t//$PQ_RS/}"
+  t="${t#"${t%%[![:space:]]*}"}"
+  t="${t%"${t##*[![:space:]]}"}"
+  [ -n "$t" ] && PQ_TASKS+=("$t")
+}
+
+# Splits a message (stdin) into PQ_TASKS: each /queue or queue: line starts a
+# new task, lines without a prefix continue the task above them
+pq_split_tasks() {
+  local line current="" started=0
+  PQ_TASKS=()
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ $PQ_SLASH_RE ]]; then
+      [ "$started" -eq 1 ] && pq_add_task "$current"
+      current="${BASH_REMATCH[3]}"
+      started=1
+    elif [[ "$line" =~ $PQ_PREFIX_RE ]]; then
+      [ "$started" -eq 1 ] && pq_add_task "$current"
+      current="${BASH_REMATCH[1]}"
+      started=1
+    elif [ "$started" -eq 1 ]; then
+      current+=$'\n'"$line"
+    fi
+  done
+  [ "$started" -eq 1 ] && pq_add_task "$current"
 }
 
 # Loads the session queue into PQ_ITEMS

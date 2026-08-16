@@ -161,6 +161,46 @@ for ((i = 1; i <= 12; i++)); do EXPECT+=$'\n'"  ${i}. status item ${i}"; done
 [ "$REASON" = "$EXPECT" ]; check $? "12-task listing matches exactly"
 rm -f "$QF"
 
+echo "== queue: prefix works like /queue =="
+rm -f "$QF"
+OUT=$(mkin $'Queue: first via prefix\nextra line\n/queue second via slash' | bash scripts/queue-next.sh)
+CTX=$(printf '%s' "$OUT" | jfield hookSpecificOutput.additionalContext)
+case "$CTX" in *$'first via prefix\nextra line'*) ok "prefix task starts, continuation kept, case-insensitive";; *) bad "prefix task starts, continuation kept, case-insensitive";; esac
+[ "$(printf '%s' "$OUT" | jfield systemMessage)" = "Prompt queue: starting task — 1 more queued" ]
+check $? "slash task queued behind prefix task"
+[ "$(cat "$QF")" = "second via slash$RS" ]; check $? "mixed prefixes split correctly"
+rm -f "$QF"
+REASON=$(mkin 'queue:' | bash scripts/queue-next.sh | jfield reason)
+case "$REASON" in "Queue is empty"*) ok "bare queue: shows status";; *) bad "bare queue: shows status";; esac
+
+echo "== queue-add.sh appends mid-turn tasks =="
+rm -f "$QF"
+mkdir -p "$(dirname "$QF")"
+printf 'seed task%s' "$RS" > "$QF"
+OUT=$(printf 'queue: added later' | bash scripts/queue-add.sh "$QF")
+[ "$OUT" = "Queued 1 task — 2 now pending" ]; check $? "reports added and pending counts"
+[ "$(cat "$QF")" = "seed task${RS}added later${RS}" ]; check $? "appends behind existing tasks"
+OUT=$(printf 'no prefix at all\nsecond line' | bash scripts/queue-add.sh "$QF")
+[ "$OUT" = "Queued 1 task — 3 now pending" ]; check $? "raw text falls back to one task"
+stopin | bash scripts/queue-stop.sh > /dev/null
+[ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = "added later" ]; check $? "mid-turn task pops in order"
+[ "$(stopin | bash scripts/queue-stop.sh | jfield reason)" = $'no prefix at all\nsecond line' ]; check $? "raw multi-line round-trips"
+printf '   \n' | bash scripts/queue-add.sh "$QF" >/dev/null 2>&1
+[ $? -ne 0 ]; check $? "blank input rejected"
+bash scripts/queue-add.sh </dev/null >/dev/null 2>&1
+[ $? -ne 0 ]; check $? "missing file argument rejected"
+
+echo "== queue-setup.sh injects the mid-turn instruction =="
+SHOME=$(mktemp -d "${TMPDIR:-/tmp}/pq-home.XXXXXX")
+OUT=$(printf '{"session_id":"%s","hook_event_name":"SessionStart","source":"startup"}' "$SID" \
+  | HOME="$SHOME" CLAUDE_PLUGIN_ROOT="$(pwd)" bash scripts/queue-setup.sh)
+printf '%s' "$OUT" | jvalid; check $? "setup output is valid JSON"
+CTX=$(printf '%s' "$OUT" | jfield hookSpecificOutput.additionalContext)
+case "$CTX" in *"$(pwd)/scripts/queue-add.sh"*) ok "instruction bakes the helper path";; *) bad "instruction bakes the helper path";; esac
+case "$CTX" in *"$QF"*) ok "instruction bakes this session's queue file";; *) bad "instruction bakes this session's queue file";; esac
+[ -f "$SHOME/.claude/commands/queue.md" ]; check $? "stub installed under HOME"
+rm -rf "$SHOME"
+
 echo
 echo "passed: $PASS  failed: $FAIL"
 [ "$FAIL" -eq 0 ]
